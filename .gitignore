@@ -1,5 +1,6 @@
 *.MOV
 *.mp4
 *.wav
+*.avi
 __pycache__/
 

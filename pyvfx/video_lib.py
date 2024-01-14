@@ -8,6 +8,14 @@ import scipy.io.wavfile as wavfile
 from skimage.exposure import adjust_gamma
 from natsort import natsorted
 
+
+def turn_img_into_np(vid: np.ndarray, crop: bool, width, height):
+    result = np.asarray(vid)
+    if (crop):
+        result = result[:, height[0]:height[1], width[0]:width[1], :]
+    return result
+
+
 def import_video(source_path: str,
                 crop:bool = False, 
                 new_width:tuple = (50,100), 
@@ -33,9 +41,7 @@ def import_video(source_path: str,
 
     vc.release()
     with alive_bar(title='Converting to NumPy Array', monitor=False, elapsed=False, receipt=False) as bar:
-        total_frames = np.asarray(frames)
-        if (crop):
-            total_frames = total_frames[:, new_height[0]:new_height[1], new_width[0]:new_width[1], :]
+        total_frames = turn_img_into_np(frames, crop, new_width, new_height)
     return total_frames, frame_rate, frame_count
 
 
@@ -131,7 +137,7 @@ def create_video_from_array(source: np.ndarray, destination_path: str, fps: int)
     out_vid = cv2.VideoWriter(destination_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
     with alive_bar(source.shape[0], receipt=False) as bar:
         for frame in source:
-            out_vid.write(frame)
+            out_vid.write(frame.astype(np.uint8))
             bar()
     out_vid.release()
 

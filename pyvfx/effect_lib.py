@@ -4,6 +4,7 @@ from alive_progress import alive_bar
 from helper_funcs import map_range, hz_to_bins
 from helper_classes import AveragedValue
 from skimage.exposure import adjust_gamma
+from skimage.filters import laplace
 
 def pixelate_video_from_path(source_path: str, pixel_size: int, randomize:bool=False):
     """ choose a size for NxN pixels, where each square is 
@@ -161,33 +162,16 @@ def mirrorize_video_from_array(source: np.ndarray, horizontal: bool, vertical: b
             bar()
 
 
-def saturate_image_from_array(img: np.ndarray, amt: float):
-    hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv_image)
-    s = s.astype(float)
-    s *= amt
-    s = s.astype(np.uint8) # may result in overflow
-    hsv_image = cv2.merge([h, s, v])
-    return cv2.cvtColor(hsv_image, cv2.COLOR_HSV2BGR)
-
-
-def expose_image_from_array(img: np.ndarray, gamma: float):
-    return adjust_gamma(img, gamma)
-
-def rotate_video(vid: np.ndarray, n_times: int):
-    l = [np.rot90(n, k = n_times) for n in vid]
-    vid = np.asarray(l)
-    return vid
-
 def video_effect_based_on_audio(video: np.ndarray, 
                                 stft: np.ndarray,
                                 sample_rate: float,
                                 frequency: float, 
-                                type: str):
+                                type: str,
+                                avging: int):
     _bin = hz_to_bins(frequency, sample_rate, len(stft[0]))
     max_at_bin = max([n[_bin] for n in stft])
     min_at_bin = min([n[_bin] for n in stft])
-    sample = AveragedValue(10)
+    sample = AveragedValue(avging)
     if type=="exposure":
         with alive_bar(len(video), receipt=False) as bar:
             for idx, frame in enumerate(video):
@@ -201,5 +185,61 @@ def video_effect_based_on_audio(video: np.ndarray,
                 amt = map_range(sample.append(stft[idx][_bin]), min_at_bin, max_at_bin / 2.0, 0.9, 3.0)
                 video[idx] = saturate_image_from_array(frame, amt)
                 bar()
+    elif type=="quantization":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                amt = 4
+                video[idx] = quantize_image_from_array(frame, amt)
+                bar()
+    elif type=="laplace":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                amt = map_range(sample.append(stft[idx][_bin]), min_at_bin, max_at_bin / 3.0, 0.1, 0.9)
+                video[idx] = laplace_image_from_array(frame, amt)
+                bar()
+    elif type=="threshold":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                amt = 100
+                video[idx] = threshold_image_from_array(frame, amt)
+                bar()
     return video
 
+
+def rotate_video(vid: np.ndarray, n_times: int):
+    l = [np.rot90(n, k = n_times) for n in vid]
+    vid = np.asarray(l)
+    return vid
+
+
+## image based effects ## 
+
+
+def saturate_image_from_array(img: np.ndarray, amt: float):
+    hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv_image)
+    s = s.astype(float)
+    s *= amt
+    s = s.astype(np.uint8) # may result in overflow
+    hsv_image = cv2.merge([h, s, v])
+    return cv2.cvtColor(hsv_image, cv2.COLOR_HSV2BGR)
+
+
+def expose_image_from_array(img: np.ndarray, gamma: float):
+    return adjust_gamma(img, gamma)
+
+
+def quantize_image_from_array(img: np.ndarray, amt: int):
+    return img & (0xFFFE << amt)
+
+
+def laplace_image_from_arrays(img: np.ndarray, amt: float):
+    # amt should be between 0 and 1. percentage of the image that 
+    # is the frangi, vs the percentage that is the OG image
+    return 3.0*amt*laplace(img) + (1.0-(amt/3.0))*img
+
+
+def threshold_image_from_array(img: np.ndarray, thresh: int):
+    mask = img < thresh
+    img[mask] = 0
+    return img

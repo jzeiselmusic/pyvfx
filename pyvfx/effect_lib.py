@@ -162,6 +162,35 @@ def mirrorize_video_from_array(source: np.ndarray, horizontal: bool, vertical: b
             bar()
 
 
+def video_effect_to_whole(video: np.ndarray, type: str, amt):
+    if type=="exposure":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                video[idx] = expose_image_from_array(frame, amt)
+                bar()
+    elif type=="saturation":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                video[idx] = saturate_image_from_array(frame, amt)
+                bar()
+    elif type=="quantization":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                video[idx] = quantize_image_from_array(frame, amt)
+                bar()
+    elif type=="laplace":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                video[idx] = laplace_image_from_array(frame, amt)
+                bar()
+    elif type=="threshold":
+        with alive_bar(len(video), receipt=False) as bar:
+            for idx, frame in enumerate(video):
+                video[idx] = threshold_image_from_array(frame, amt)
+                bar()
+    return video
+
+
 def video_effect_based_on_audio(video: np.ndarray, 
                                 stft: np.ndarray,
                                 sample_rate: float,
@@ -188,7 +217,7 @@ def video_effect_based_on_audio(video: np.ndarray,
     elif type=="quantization":
         with alive_bar(len(video), receipt=False) as bar:
             for idx, frame in enumerate(video):
-                amt = 4
+                amt = int(map_range(sample.append(stft[idx][_bin]), min_at_bin, max_at_bin/2.0, 1, 5))
                 video[idx] = quantize_image_from_array(frame, amt)
                 bar()
     elif type=="laplace":
@@ -200,7 +229,7 @@ def video_effect_based_on_audio(video: np.ndarray,
     elif type=="threshold":
         with alive_bar(len(video), receipt=False) as bar:
             for idx, frame in enumerate(video):
-                amt = 100
+                amt = map_range(sample.append(stft[idx][_bin]), min_at_bin, max_at_bin / 2.0, 20, 200)
                 video[idx] = threshold_image_from_array(frame, amt)
                 bar()
     return video

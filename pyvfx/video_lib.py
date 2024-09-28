@@ -8,7 +8,6 @@ import scipy.io.wavfile as wavfile
 from skimage.exposure import adjust_gamma
 from natsort import natsorted
 
-
 def turn_img_into_np(vid: np.ndarray, crop: bool, width, height):
     result = np.asarray(vid)
     if (crop):
@@ -19,7 +18,7 @@ def turn_img_into_np(vid: np.ndarray, crop: bool, width, height):
 def import_video(source_path: str,
                 crop:bool = False, 
                 new_width:tuple = (50,100), 
-                new_height:tuple = (50,100)) -> tuple[np.ndarray, int, int]:
+                new_height:tuple = (50,100)) -> tuple[np.ndarray, float, int]:
     """ input path to video, receive the video as an ndarray, 
         frame rate, and frame count 
 
@@ -29,7 +28,7 @@ def import_video(source_path: str,
     if not vc.isOpened():
         raise RuntimeError("error opening file from given path")
     frames = []
-    frame_rate = int(vc.get(cv2.CAP_PROP_FPS))
+    frame_rate = float(vc.get(cv2.CAP_PROP_FPS))
     frame_count = int(vc.get(cv2.CAP_PROP_FRAME_COUNT))
     with alive_bar(frame_count, receipt=False) as bar:
         while vc.isOpened():
@@ -128,7 +127,7 @@ def create_video_from_frames(source_path: str, destination_path: str, fps: int):
     clip.write_videofile(destination_path, codec="libx264")
 
 
-def create_video_from_array(source: np.ndarray, destination_path: str, fps: int):
+def create_video_from_array(source: np.ndarray, destination_path: str, fps: float):
     """ provide a source numpy array, function will write a .mp4 file out to 
         destination path.
     """

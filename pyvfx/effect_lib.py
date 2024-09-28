@@ -1,10 +1,13 @@
 import numpy as np
 import cv2
 from alive_progress import alive_bar
-from helper_funcs import map_range, hz_to_bins
+from helper_funcs import map_range, hz_to_bins, save_as_jpeg, save_as_jp2, import_img_from_path
 from helper_classes import AveragedValue
 from skimage.exposure import adjust_gamma
 from skimage.filters import laplace
+import imageio.v3 as imageio
+import os
+import shutil
 
 def pixelate_video_from_path(source_path: str, pixel_size: int, randomize:bool=False):
     """ choose a size for NxN pixels, where each square is 
@@ -162,7 +165,8 @@ def mirrorize_video_from_array(source: np.ndarray, horizontal: bool, vertical: b
             bar()
 
 
-def video_effect_to_whole(video: np.ndarray, type: str, amt):
+def video_effect_to_whole(vid: np.ndarray, type: str, amt):
+    video = np.copy(vid)
     if type=="exposure":
         with alive_bar(len(video), receipt=False) as bar:
             for idx, frame in enumerate(video):
@@ -181,7 +185,7 @@ def video_effect_to_whole(video: np.ndarray, type: str, amt):
     elif type=="laplace":
         with alive_bar(len(video), receipt=False) as bar:
             for idx, frame in enumerate(video):
-                video[idx] = laplace_image_from_array(frame, amt)
+                video[idx] = laplace_video_from_array(frame, amt)
                 bar()
     elif type=="threshold":
         with alive_bar(len(video), receipt=False) as bar:
@@ -191,12 +195,13 @@ def video_effect_to_whole(video: np.ndarray, type: str, amt):
     return video
 
 
-def video_effect_based_on_audio(video: np.ndarray, 
+def video_effect_based_on_audio(vid: np.ndarray, 
                                 stft: np.ndarray,
                                 sample_rate: float,
                                 frequency: float, 
                                 type: str,
                                 avging: int):
+    video = np.copy(vid)
     _bin = hz_to_bins(frequency, sample_rate, len(stft[0]))
     max_at_bin = max([n[_bin] for n in stft])
     min_at_bin = min([n[_bin] for n in stft])
@@ -236,16 +241,15 @@ def video_effect_based_on_audio(video: np.ndarray,
 
 
 def rotate_video(vid: np.ndarray, n_times: int):
-    l = [np.rot90(n, k = n_times) for n in vid]
-    vid = np.asarray(l)
-    return vid
+    internal_vid = np.copy(vid)
+    l = [np.rot90(n, k = n_times) for n in internal_vid]
+    internal_vid = np.asarray(l)
+    return internal_vid
 
 
-## image based effects ## 
-
-
-def saturate_image_from_array(img: np.ndarray, amt: float):
-    hsv_image = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+def saturate_video_from_array(vid: np.ndarray, amt: float):
+    internal_img = np.copy(vid)
+    hsv_image = cv2.cvtColor(internal_img, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv_image)
     s = s.astype(float)
     s *= amt
@@ -254,21 +258,61 @@ def saturate_image_from_array(img: np.ndarray, amt: float):
     return cv2.cvtColor(hsv_image, cv2.COLOR_HSV2BGR)
 
 
-def expose_image_from_array(img: np.ndarray, gamma: float):
-    return adjust_gamma(img, gamma)
+def expose_video_from_array(vid: np.ndarray, gamma: float):
+    internal_img = np.copy(vid)
+    return adjust_gamma(internal_img, gamma)
 
 
-def quantize_image_from_array(img: np.ndarray, amt: int):
-    return img & (0xFFFE << amt)
+def quantize_video_from_array(vid: np.ndarray, amt: int):
+    internal_img = np.copy(vid)
+    return internal_img & (0xFFFE << amt)
 
 
-def laplace_image_from_arrays(img: np.ndarray, amt: float):
+def laplace_video_from_array(vid: np.ndarray, amt: float):
     # amt should be between 0 and 1. percentage of the image that 
     # is the frangi, vs the percentage that is the OG image
-    return 3.0*amt*laplace(img) + (1.0-(amt/3.0))*img
+    internal_img = np.copy(vid)
+    return 10.0*amt*laplace(internal_img) + (1.0-(amt/10.0))*internal_img
 
 
-def threshold_image_from_array(img: np.ndarray, thresh: int):
-    mask = img < thresh
-    img[mask] = 0
-    return img
+def threshold_video_from_array(vid: np.ndarray, thresh_lo: int, thresh_hi: int):
+    # thresh hi should be lower than 256 and thresh lo should be higher than 0
+    internal_img = np.copy(vid)
+    mask = internal_img < thresh_lo
+    internal_img[mask] = 0
+
+    mask_hi = internal_img > thresh_hi
+    internal_img[mask_hi] = 255
+    return internal_img
+
+# TODO 
+
+# create effect where frames are saved to JPEG2000 format and then re-uploaded into video
+
+def threshold_video_movement(vid: np.ndarray, thresh: int):
+    frames = np.copy(vid)
+    updated_frames = np.copy(vid)
+    with alive_bar(len(frames), receipt=False) as bar:
+        for i in range(1, len(frames)):
+            difference = np.abs(frames[i] - frames[i - 1])
+            mask = difference > thresh
+            updated_frames[i] = np.where(mask, frames[i], updated_frames[i - 1])
+            bar()
+    return updated_frames
+
+def jpegify_video_from_array(vid: np.ndarray, type: str, amt: int):
+    frames = np.copy(vid)
+    if not os.path.exists("./tempjpg"):
+        os.makedirs("./tempjpg")
+    with alive_bar(len(frames), receipt=False) as bar:
+        for i in range(len(frames)):
+            image = frames[i]
+            if (type == "jpg"):
+                save_as_jpeg(image, f"./tempjpg/{i}.jpg", amt)
+                frames[i] = import_img_from_path(f"./tempjpg/{i}.jpg")
+            elif (type == "jp2"):
+                save_as_jp2(image, f"./tempjpg/{i}.jp2", amt)
+                frames[i] = import_img_from_path(f"./tempjpg/{i}.jp2")
+            bar()
+    shutil.rmtree("./tempjpg")
+    return frames

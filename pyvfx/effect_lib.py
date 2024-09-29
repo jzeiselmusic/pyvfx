@@ -289,14 +289,18 @@ def threshold_video_from_array(vid: np.ndarray, thresh_lo: int, thresh_hi: int):
 
 # create effect where frames are saved to JPEG2000 format and then re-uploaded into video
 
-def threshold_video_movement(vid: np.ndarray, thresh: int):
+def threshold_video_movement(vid: np.ndarray, thresh: int, type: int = 1):
     frames = np.copy(vid)
     updated_frames = np.copy(vid)
     with alive_bar(len(frames), receipt=False) as bar:
         for i in range(1, len(frames)):
-            difference = np.abs(frames[i] - frames[i - 1])
-            mask = difference > thresh
-            updated_frames[i] = np.where(mask, frames[i], updated_frames[i - 1])
+            difference = np.sum(np.abs(frames[i] - frames[i - 1]), axis=-1)
+            if (type == 1):
+                mask = difference > thresh
+            elif (type == 2):
+                mask = difference < thresh
+            mask_broadcast = np.repeat(mask[:, :, np.newaxis], 3, axis=2)
+            updated_frames[i] = np.where(mask_broadcast, frames[i], updated_frames[i - 1])
             bar()
     return updated_frames
 
